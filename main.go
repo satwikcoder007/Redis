@@ -1,11 +1,10 @@
-package main 
+package main
 
 import (
 	"flag"
-	"log"
 
-	"my-redis/config"
-
+	"github.com/satwikcoder007/Redis/config"
+	"github.com/satwikcoder007/Redis/server"
 )
 
 func setupFlags() {
@@ -15,5 +14,5 @@ func setupFlags() {
 }
 func main() {
 	setupFlags()
-	log.Printf("Starting server on %s:%d", config.Host, config.Port)
+	server.RunTcpServer()
 }
