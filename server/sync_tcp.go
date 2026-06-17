@@ -1,25 +1,49 @@
 package server
 
 import (
+	"fmt"
 	"io"
 	"log"
 	"net"
 	"strconv"
-
+	"strings"
 	"github.com/satwikcoder007/Redis/config"
+	"github.com/satwikcoder007/Redis/core"
 )
 
-func readCommand(conn net.Conn) (string, error) {
-	var buf []byte = make([]byte, 512)
-	n, err := conn.Read(buf[:])
+func readCommand(conn net.Conn) (*core.RedisCmd, error) {
+	buf := make([]byte, 512)
+
+	n, err := conn.Read(buf)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return string(buf[:n]), nil
+
+	tokens, err := core.Decode(buf[:n])
+	if err != nil {
+		return nil, err
+	}
+
+	arr := tokens.([]interface{})
+
+	strs := make([]string, len(arr))
+	for i, v := range arr {
+		strs[i] = v.(string)
+	}
+
+	return &core.RedisCmd{
+		Cmd:  strings.ToUpper(strs[0]),
+		Args: strs[1:],
+	}, nil
 }
-func respond(conn net.Conn, cmd string) error {
-		_,err := conn.Write([]byte(cmd))
-		return err
+func respondError (conn net.Conn, err error) {
+	conn.Write([]byte(fmt.Sprintf("-%s\r\n", err.Error())))
+}
+func respond(conn net.Conn, cmd *core.RedisCmd) {
+	//log.Printf("Received command: %s with args: %v", cmd.Cmd, cmd.Args)
+	if err := core.EvalAndRespond(conn, cmd); err!= nil {
+		respondError(conn, err)
+	}
 }
 
 func RunTcpServer() {
@@ -50,6 +74,7 @@ func RunTcpServer() {
 			// handle client commands
 			cmd,err := readCommand(conn)
 			if err != nil {
+				respondError(conn, err)
 				conn.Close()
 				log.Printf("Client disconnected with address: %d", connection_client)
 				connection_client -= 1
@@ -59,10 +84,7 @@ func RunTcpServer() {
 				}
 				break
 			}
-			log.Println("command",cmd)
-			if err = respond(conn,cmd); err != nil {
-				log.Println("err",err)
-			}
+			respond(conn, cmd)
 		}
 
 	}

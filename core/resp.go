@@ -2,15 +2,16 @@ package core
 
 import (
 	"errors"
+	"strconv"
 )
 
 func readSimpleString(data []byte) (string,int, error) {
-	pos := 0
+	pos := 1
 	for ; data[pos] != '\r'; pos++ {}
-	return string(data[:pos]), pos + 2, nil
+	return string(data[1:pos]), pos + 2, nil
 }
 func readInteger(data []byte) (int, int, error) {
-	pos := 0
+	pos := 1
 	val := 0
 	if data[0] == '-' {
 		pos++
@@ -24,7 +25,7 @@ func readInteger(data []byte) (int, int, error) {
 	return val, pos + 2, nil
 }
 func readBulkString(data []byte) (string, int, error) {
-	pos := 0
+	pos := 1
 	length := 0
 	for ; data[pos] != '\r'; pos++ {
 		length = length*10 + int(data[pos]-'0')
@@ -34,7 +35,7 @@ func readBulkString(data []byte) (string, int, error) {
 }
 func readArray(data []byte) ([]interface{}, int, error) {
 	
-	pos := 0
+	pos := 1
 	length := 0
 	var delta int 
 	for ; data[pos] != '\r'; pos++ {
@@ -45,7 +46,7 @@ func readArray(data []byte) ([]interface{}, int, error) {
 
 	for i:=0; i<length;i++ {
 		array[i],delta,_  = decodeOne(data[pos:])
-		pos += delta+1
+		pos += delta
 	}
 
 	return array, pos, nil
@@ -57,19 +58,19 @@ func readError(data []byte) (string,int, error) {
 func decodeOne(data []byte) (interface{},int,error){
 	switch data[0] {
 	case '+':
-		return readSimpleString(data[1:])
+		return readSimpleString(data)
 	
 	case ':':
-		return readInteger(data[1:])
+		return readInteger(data)
 	
 	case '$':
-		return readBulkString(data[1:])
+		return readBulkString(data)
 		
 	case '*':
-		return readArray(data[1:])
+		return readArray(data)
 	
 	case '-':
-		return readError(data[1:])
+		return readError(data)
 	
 	default:
 		return nil,0,errors.New("invalid RESP type")
@@ -82,3 +83,14 @@ func Decode(data []byte) (interface{}, error) {
 	value,_,err := decodeOne(data)
 	return value, err
 }
+
+func Encode(value interface{}, isSimpleString bool) []byte {
+	switch v := value.(type) {
+	case string:
+		if isSimpleString {
+			return []byte("+" + v + "\r\n")
+		}
+		return []byte("$"+strconv.Itoa(len(v))+"\r\n"+v+"\r\n")
+	}
+	return []byte{}
+} 
